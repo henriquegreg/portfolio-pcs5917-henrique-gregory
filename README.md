@@ -2,7 +2,7 @@
 
 ## Portfólio Individual
 
-**Aluno:** Nome do aluno ou aluna  
+**Aluno:** Henrique Gregory Gimenez 
 **Disciplina:** PCS5917 – IA Adversarial  
 **Período:** 3º período de 2026  
 **Instituição:** Universidade de São Paulo – Escola Politécnica  
@@ -44,6 +44,17 @@ Organize seu README focando em ser objetivo, com evidências de resultados e cit
 └── outros/
     └── ...
 ```
+
+## Atividade 1 - Notícia e Referência Acadêmica sobre IA Adversarial
+
+### Post - Pesquisadores descobrem que sons inaudíveis ocultos em vídeos podem sequestrar chatbot de voz
+
+![Atividade1_Post](<images/Atividade 1 - Post.png> "Post")
+
+### Resposta - Atacantes podem utilizar o Google Calendar como meio de prompt injection
+
+![Atividade1_Resposta](<images/Atividade 1 - Resposta.png> "Resposta")
+
 
 ## Disclaimer de Uso Ético
 
