@@ -98,6 +98,87 @@ A utilização de um modelo compacto de 3B parâmetros para julgar as saídas tr
 ### Miro Palestra
 ![aula03-atividade-miro](<images/aula03-atividade-miro.png> "Post")
 
+## Atividade 3 - Detecção de Áudio Falso
+### 1. Visão geral
+ 
+| Item | Descrição |
+|---|---|
+| Dataset | ASVspoof 5 (Kaggle: `ulianazb/asvspoof-2024`), ~324 mil arquivos `.flac` |
+| Subconjunto usado | **600 amostras balanceadas** (300 bonafide + 300 spoof), sorteadas com `seed = 42` |
+| Extração de features | `pyAudioAnalysis` (`ShortTermFeatures`), janela de 50 ms, passo de 25 ms, áudio a 16 kHz |
+| Vetor por áudio | 68 features (34 + 34 deltas), médias ao longo do tempo |
+| Modelos | Regressão Logística, Random Forest, SVM |
+| Validação | Hold-out 80/20 estratificado + validação cruzada de 5 folds no treino |
+ 
+### 2. Metodologia
+ 
+1. **Obtenção do dataset:** o ZIP do Kaggle é lido remotamente com `remotezip`, sem download integral.
+2. **Subconjunto balanceado:** o dataset original é muito desbalanceado (50.131 bonafide × 273.176 spoof). As classes foram identificadas pelos arquivos de metadados e foram sorteadas 300 amostras de cada, salvas no Google Drive.
+3. **Extração de features:** cada áudio vira um vetor de 68 valores — ZCR, energia, entropia de energia, features espectrais (centroide, espalhamento, entropia, fluxo, *rolloff*), 13 MFCCs, 12 chromas e suas derivadas (*delta*).
+4. **Análise exploratória:** boxplots e médias por classe.
+5. **Modelagem:** três classificadores, comparados por validação cruzada (treino) e acurácia no teste.
+6. **Análise de sensibilidade:** importância das features no Random Forest.
+
+### 3. Análise exploratória
+ 
+![Boxplots das features por classe](images/aula03-boxplot.png)
+ 
+Médias por classe das quatro features analisadas:
+ 
+| Classe | `zcr` | `energy` | `energy_entropy` | `mfcc_1` |
+|---|---|---|---|---|
+| bonafide | 0,1545 | 0,0144 | 2,8833 | −28,81 |
+| spoof | 0,1391 | 0,0165 | 2,8521 | −27,69 |
+ 
+**Observações**
+ 
+- As diferenças nas médias são **pequenas** e as distribuições se sobrepõem bastante: nenhuma dessas features, sozinha, separa as classes de forma confiável.
+- O áudio bonafide tende a ter ZCR ligeiramente maior e energia média ligeiramente menor que o spoof, mas a diferença é modesta.
+- Isso indica que a discriminação depende da **combinação de várias features**, o que justifica o uso de classificadores multivariados.
+### 4. Resultados
+ 
+#### 4.1 Acurácia
+ 
+| Modelo | Acurácia CV (5 folds, treino) | Acurácia no teste (120 amostras) |
+|---|---|---|
+| Regressão Logística | 0,7083 ± 0,0600 | 0,7250 |
+| **Random Forest** | **0,7479 ± 0,0553** | **0,7417** |
+| SVM (RBF) | 0,6771 ± 0,0401 | 0,7000 |
+ 
+#### 4.2 Matrizes de confusão (conjunto de teste)
+ 
+![Matrizes de confusão](images/aula03-confusion-matrix.png)
+ 
+#### 4.3 Importância das features (Random Forest)
+ 
+| # | Feature | Importância |
+|---|---|---|
+| 1 | `mfcc_1` | 0,1079 |
+| 2 | `mfcc_7` | 0,0280 |
+| 3 | `spectral_entropy` | 0,0275 |
+| 4 | `mfcc_2` | 0,0255 |
+| 5 | `energy_entropy` | 0,0251 |
+| 6 | `mfcc_6` | 0,0246 |
+| 7 | `spectral_spread` | 0,0220 |
+| 8 | `delta mfcc_10` | 0,0211 |
+| 9 | `chroma_11` | 0,0207 |
+| 10 | `mfcc_5` | 0,0202 |
+ 
+### 5. Discussão
+ 
+- **Desempenho acima do acaso.** Todos os modelos ficaram entre 68% e 75%, bem acima dos 50% de um classificador aleatório, mostrando que as features acústicas simples carregam algum sinal de diferença entre fala real e falsa.
+- **Random Forest foi o melhor**, tanto na validação cruzada quanto no teste. Isso é coerente com o fato de a separação ser não linear e distribuída entre muitas features pouco discriminativas individualmente.
+- **A diferença entre modelos não é conclusiva.** O desvio-padrão da validação cruzada (4–6 pontos percentuais) é do mesmo tamanho que as diferenças entre os modelos, e o conjunto de teste tem apenas 120 amostras (cada erro equivale a ~0,8 p.p.). A ordenação RF > LR > SVM é uma tendência, não uma conclusão estatisticamente sustentada.
+- **`mfcc_1` se destaca.** Sua importância (≈ 0,108) é quase quatro vezes a da segunda feature. Como o primeiro MFCC está ligado ao nível/forma geral do espectro, isso sugere que o **envelope espectral global** é o principal indicativo usado pelo modelo. Os demais MFCCs e a entropia espectral completam o ranking, o que é consistente com a literatura sobre detecção de *spoofing*, na qual artefatos espectrais são pistas importantes.
+- **Possível penalização do SVM e da Regressão Logística.** Esses modelos são sensíveis à escala das features e foram treinados sem padronização; é provável que o desempenho deles melhore com `StandardScaler`.
+### 6. Limitações
+ 
+- **Amostra pequena** (600 áudios): resultados com alta variância.
+- **Agregação pela média temporal:** descarta a dinâmica do sinal ao longo do tempo.
+- **Sem normalização das features** para SVM e Regressão Logística.
+- **Amostragem aleatória sem controle** de locutor, tipo de ataque ou partição original do ASVspoof (treino/dev), o que pode causar vazamento entre treino e teste e não permite analisar o desempenho por tipo de ataque.
+- **Métrica:** acurácia apenas. A métrica padrão em ASVspoof é o **EER** (*Equal Error Rate*).
+
 
 ## Disclaimer de Uso Ético
 
